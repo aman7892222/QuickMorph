@@ -16,3 +16,6 @@ bin/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Private notes - synced to the private QuickMorph-private repo, never published here
+private/
