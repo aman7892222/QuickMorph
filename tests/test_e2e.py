@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 import subprocess
 import sys
 import tempfile
@@ -45,7 +46,8 @@ MIN_IMAGES = {"stress.md": 3, "book.ipynb": 1, "word.docx": 1, "page.html": 1, "
 
 
 def _norm(s: str) -> str:
-    return re.sub(r"\s+", "", s)
+    # NFKC: macOS fonts label some CJK glyphs with look-alike code points (U+2F47 for 日) in the text layer
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", s))
 
 
 def _text(pdf: Path) -> str:
@@ -74,13 +76,19 @@ def test_converts_without_loss(name):
 
 
 def _count_images(resources, depth: int = 0) -> int:
-    """Image XObjects on a page, including those nested in Form XObjects (Firefox and WebKit nest them)."""
+    """Images on a page, including those nested in Form XObjects or tiling patterns (Firefox on Windows paints
+    pictures through a pattern)."""
+    resources = resources.get_object() if hasattr(resources, "get_object") else resources
     n = 0
     for ref in ((resources or {}).get("/XObject") or {}).values():
         obj = ref.get_object()
         if obj.get("/Subtype") == "/Image":
             n += 1
         elif obj.get("/Subtype") == "/Form" and depth < 8:
+            n += _count_images(obj.get("/Resources"), depth + 1)
+    for ref in ((resources or {}).get("/Pattern") or {}).values():
+        obj = ref.get_object()
+        if obj.get("/PatternType") == 1 and depth < 8:
             n += _count_images(obj.get("/Resources"), depth + 1)
     return n
 
