@@ -156,6 +156,8 @@ def firefox_print(firefox: str, url: str, out: Path, size_in: tuple[float, float
         "browser.startup.homepage_override.mstone": "ignore", "browser.aboutwelcome.enabled": False,
         "datareporting.policy.dataSubmissionEnabled": False, "toolkit.telemetry.reportingpolicy.firstRun": False,
         "app.update.disabledForTesting": True, "browser.safebrowsing.update.enabled": False,
+        # Marionette's automation defaults relax these; a document must never read its neighbouring files
+        "security.fileuri.strict_origin_policy": True, "privacy.file_unique_origin": True,
     }
     (profile / "user.js").write_text("".join(f'user_pref("{k}", {json.dumps(v)});\n' for k, v in prefs.items()),
                                      encoding="utf-8")

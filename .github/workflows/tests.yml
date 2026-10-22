@@ -11,7 +11,10 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -20,18 +23,32 @@ jobs:
       - run: python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Tests - Microsoft Edge (default engine)
         run: python -m pytest tests -q
+      - name: Keep the Edge PDFs
+        if: always()
+        run: mkdir -p ci-output/edge && cp tests/samples/*.pdf ci-output/edge/ || true
       - name: Tests - Firefox only (PC without Edge/Chrome)
+        if: success() || failure()
         env:
           QUICKMORPH_ENGINE: firefox
         run: python -m pytest tests -q
+      - name: Keep the Firefox PDFs
+        if: always()
+        run: mkdir -p ci-output/firefox && cp tests/samples/*.pdf ci-output/firefox/ || true
       - name: Installer round trip (HKCU only, Explorer is never restarted)
+        if: success() || failure()
         run: |
           python install.py
           python install.py --uninstall
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdfs-windows
+          path: ci-output/
+          if-no-files-found: ignore
 
   macos:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       # The oldest Python we support is the 3.9 that ships with Apple's command line tools.
@@ -43,15 +60,27 @@ jobs:
       - run: brew install pandoc
       - name: Tests - Google Chrome
         run: .venv/bin/python -m pytest tests -q
+      - name: Keep the Chrome PDFs
+        if: always()
+        run: mkdir -p ci-output/chrome && cp tests/samples/*.pdf ci-output/chrome/ || true
       - name: Tests - built-in WebKit (Mac without Chrome/Edge)
+        if: success() || failure()
         env:
           QUICKMORPH_ENGINE: webkit
         run: .venv/bin/python -m pytest tests -q
+      - name: Keep the WebKit PDFs
+        if: always()
+        run: mkdir -p ci-output/webkit && cp tests/samples/*.pdf ci-output/webkit/ || true
       - name: Tests - Firefox only
+        if: success() || failure()
         env:
           QUICKMORPH_ENGINE: firefox
         run: .venv/bin/python -m pytest tests -q
+      - name: Keep the Firefox PDFs
+        if: always()
+        run: mkdir -p ci-output/firefox && cp tests/samples/*.pdf ci-output/firefox/ || true
       - name: Finder Quick Action end to end
+        if: success() || failure()
         run: |
           /usr/bin/python3 install.py
           plutil -lint ~/Library/Services/QuickMorph*.workflow/Contents/Info.plist ~/Library/Services/QuickMorph*.workflow/Contents/document.wflow
@@ -59,3 +88,9 @@ jobs:
           automator -i "$RUNNER_TEMP/qa.md" ~/Library/Services/"QuickMorph - Convert to PDF.workflow"
           test -s "$RUNNER_TEMP/qa.pdf"
           /usr/bin/python3 install.py --uninstall
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdfs-macos
+          path: ci-output/
+          if-no-files-found: ignore

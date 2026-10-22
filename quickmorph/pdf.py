@@ -110,12 +110,10 @@ def _render(engine: str, exe: str, doc: render.Doc, pdf: Path, work: Path) -> tu
     from . import fallback
     if doc.direct:
         url = doc.direct.as_uri()
-    else:  # these engines apply the page margin themselves; Firefox only loads fonts from beside the page
+    else:  # these engines apply the page margin themselves
         html = doc.html.replace("</head>", "<style>@page { margin: 0 !important; }</style></head>", 1)
-        katex = render.VENDOR / "katex"
-        if engine == "firefox" and katex.as_uri() in html:
-            shutil.copytree(katex, work / "katex")
-            html = html.replace(katex.as_uri() + "/", "katex/")
+        if engine == "firefox":
+            html = _inline_katex(html)
         url = _write_page(html, work)
     size = paper_inches(paper_size(), doc.landscape)
     if engine == "webkit":
@@ -123,6 +121,24 @@ def _render(engine: str, exe: str, doc: render.Doc, pdf: Path, work: Path) -> tu
     else:
         ok, err = fallback.firefox_print(exe, url, pdf, size, wait, TIMEOUT, work)
     return ok and _complete(pdf), err
+
+
+def _inline_katex(html: str) -> str:
+    """Firefox's file:// rules block web fonts from other folders, so embed KaTeX's CSS and woff2 fonts in the page
+    (only for documents with math; ~300 KB)."""
+    import base64
+    css_file = render.VENDOR / "katex" / "katex.min.css"
+    link = f'<link rel="stylesheet" href="{css_file.as_uri()}">'
+    if link not in html:
+        return html
+
+    def font(m: re.Match) -> str:
+        f = css_file.parent / "fonts" / m.group(1)
+        return f"url(data:font/woff2;base64,{base64.b64encode(f.read_bytes()).decode()})" if f.is_file() else m.group(0)
+
+    css = re.sub(r"url\(fonts/([\w-]+\.woff2)\)", font, css_file.read_text(encoding="utf-8"))
+    css = re.sub(r',url\(fonts/[\w-]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)', "", css)
+    return html.replace(link, f"<style>{css}</style>", 1)
 
 
 def _write_page(html: str, work: Path) -> str:
@@ -189,13 +205,24 @@ def source_tag(src: Path) -> str:
 
 
 def _stamp(pdf: Path, tag: str) -> None:
+    """Mark the PDF as QuickMorph output: in Chromium's /Creator when possible, else a comment after %%EOF
+    (Firefox/WebKit lay their files out differently; PDF readers ignore a trailing comment)."""
+    if not _stamp_creator(pdf, tag):
+        try:
+            with open(pdf, "ab") as f:
+                f.write(f"\n%QuickMorph src={tag}\n".encode())
+        except OSError:
+            pass
+
+
+def _stamp_creator(pdf: Path, tag: str) -> bool:
     """Replace Chromium's /Creator text with 'QuickMorph <ver> src=<tag>' of the SAME length (no offsets move)."""
     try:
         with open(pdf, "r+b") as f:
             head = f.read(4096)
             start = head.find(b"/Creator (")
             if start < 0:
-                return
+                return False
             start += len(b"/Creator (")
             i, depth, end = start, 0, -1
             while i < len(head):
@@ -213,11 +240,12 @@ def _stamp(pdf: Path, tag: str) -> None:
                 i += 1
             mark = f"QuickMorph {__version__} src={tag}".encode()
             if end < 0 or len(mark) > end - start:
-                return
+                return False
             f.seek(start)
             f.write(mark.ljust(end - start))
+            return True
     except OSError:
-        pass
+        return False
 
 
 def _tag_of(pdf: Path) -> str | None:
@@ -225,9 +253,11 @@ def _tag_of(pdf: Path) -> str | None:
     try:
         with open(pdf, "rb") as f:
             head = f.read(4096)
+            f.seek(max(0, f.seek(0, 2) - 512))
+            tail = f.read()
     except OSError:
         return None
-    m = re.search(rb"/Creator \(QuickMorph \S+ src=([0-9a-f]+)", head)
+    m = re.search(rb"/Creator \(QuickMorph \S+ src=([0-9a-f]+)", head) or re.search(rb"%QuickMorph src=([0-9a-f]+)", tail)
     if m:
         return m.group(1).decode()
     return "legacy" if b"HeadlessChrome/" in head else None

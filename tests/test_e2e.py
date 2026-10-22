@@ -65,12 +65,24 @@ def test_converts_without_loss(name):
     assert out.is_file() and out.stat().st_size > 1000
     text = _text(out)
     missing = [s for s in EXPECT[name] if _norm(s) not in text]
-    assert not missing, f"lost content in {name}: {missing}"
+    assert not missing, f"lost content in {name}: {missing}\n--- extracted text (start) ---\n{text[:1500]}"
     leftover = [s for s in ABSENT.get(name, []) if _norm(s) in text]
     assert not leftover, f"{name}: not rendered: {leftover}"
     if name in MIN_IMAGES:
-        n = sum(len(p.images) for p in PdfReader(out).pages)
+        n = sum(_count_images(p.get("/Resources")) for p in PdfReader(out).pages)
         assert n >= MIN_IMAGES[name], f"{name}: expected >= {MIN_IMAGES[name]} images, got {n}"
+
+
+def _count_images(resources, depth: int = 0) -> int:
+    """Image XObjects on a page, including those nested in Form XObjects (Firefox and WebKit nest them)."""
+    n = 0
+    for ref in ((resources or {}).get("/XObject") or {}).values():
+        obj = ref.get_object()
+        if obj.get("/Subtype") == "/Image":
+            n += 1
+        elif obj.get("/Subtype") == "/Form" and depth < 8:
+            n += _count_images(obj.get("/Resources"), depth + 1)
+    return n
 
 
 def test_math_fonts_embedded_and_currency_kept():
@@ -168,14 +180,14 @@ def test_multi_select_queue_converts_everything(tmp_path):
 
 @pytest.mark.skipif(not find_pandoc(), reason="pandoc not installed")
 def test_pandoc_formats_are_sandboxed(tmp_path):
-    (tmp_path / "secret.txt").write_text("PANDOC_SECRET_SENTINEL", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("PANDOCSECRETSENTINEL", encoding="utf-8")
     org = tmp_path / "notes.org"
-    org.write_text('* Heading\n\nORG_SENTINEL text\n\n#+INCLUDE: "secret.txt"\n', encoding="utf-8")
+    org.write_text('* Heading\n\nORGSENTINEL text\n\n#+INCLUDE: "secret.txt"\n', encoding="utf-8")  # x_y = subscript in Org
     try:
         text = _text(process("save", org))
     except RuntimeError:
         return  # refusing the include outright is fine too - what matters is that nothing leaks
-    assert "ORG_SENTINEL" in text and "PANDOC_SECRET_SENTINEL" not in text
+    assert "ORGSENTINEL" in text and "PANDOCSECRETSENTINEL" not in text
     rtf = tmp_path / "letter.rtf"
     rtf.write_text(r"{\rtf1\ansi {\b RTF_SENTINEL} plain text\par}", encoding="ascii")
     assert "RTF_SENTINEL" in _text(process("save", rtf))
