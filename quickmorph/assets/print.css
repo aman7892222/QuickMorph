@@ -1,0 +1,95 @@
+/* QuickMorph stylesheet: GitHub-like look, tuned so PDF pages never clip or split badly. */
+@page {
+  margin: 16mm 15mm 18mm 15mm;
+  @bottom-center {
+    content: counter(page) " / " counter(pages);
+    font: 8pt "Segoe UI", -apple-system, Helvetica, Arial, sans-serif;
+    color: #8c959f;
+  }
+}
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
+    "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji";
+  font-size: 10.5pt; line-height: 1.6; color: #1f2328; background: #fff;
+  overflow-wrap: break-word; word-wrap: break-word;
+}
+@media screen { body { max-width: 920px; margin: 0 auto; padding: 32px 24px; } }
+
+h1, h2, h3, h4, h5, h6 { margin: 1.5em 0 .6em; font-weight: 600; line-height: 1.25; break-after: avoid; page-break-after: avoid; }
+h1 { font-size: 2em; padding-bottom: .3em; border-bottom: 1px solid #d1d9e0; }
+h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid #d1d9e0; }
+h3 { font-size: 1.25em; } h4 { font-size: 1em; } h5 { font-size: .875em; } h6 { font-size: .85em; color: #59636e; }
+body > :first-child, main > :first-child { margin-top: 0; }
+p, ul, ol, dl, blockquote, table, pre, details { margin-top: 0; margin-bottom: 1em; }
+p { orphans: 3; widows: 3; }
+a { color: #0969da; text-decoration: none; }
+ul, ol { padding-left: 2em; }
+li + li { margin-top: .25em; }
+li > p { margin-bottom: .4em; }
+hr { border: 0; border-top: 2px solid #d1d9e0; margin: 1.6em 0; }
+img, svg, video { max-width: 100%; height: auto; break-inside: avoid; page-break-inside: avoid; }
+figure { margin: 1em 0; break-inside: avoid; }
+figcaption { color: #59636e; font-size: .9em; text-align: center; }
+kbd { font: 85% Consolas, Menlo, monospace; padding: 2px 5px; border: 1px solid #d1d9e0; border-bottom-width: 2px; border-radius: 4px; background: #f6f8fa; }
+mark { background: #fff8c5; }
+sub, sup { line-height: 0; }
+
+code, pre, tt, samp {
+  font-family: "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", "Courier New", monospace;
+  font-size: 9pt;
+}
+:not(pre) > code { background: rgba(129, 139, 152, .15); border-radius: 5px; padding: .15em .4em; }
+pre {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+  background: #f6f8fa; border: 1px solid #d1d9e0; border-radius: 6px; padding: 10px 14px; line-height: 1.45;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+pre.plain { background: none; border: 0; padding: 0; font-size: 9.5pt; }
+
+blockquote { margin-left: 0; padding: 0 1em; color: #59636e; border-left: .25em solid #d1d9e0; break-inside: avoid; }
+blockquote > :last-child { margin-bottom: 0; }
+
+table { border-collapse: collapse; width: max-content; max-width: 100%; table-layout: auto; font-size: 9.5pt; }
+th, td { border: 1px solid #d1d9e0; padding: 5px 11px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-break: normal; hyphens: manual; }
+th { font-weight: 600; background: #f6f8fa; }
+tbody tr:nth-child(even) td { background: #fafbfc; }
+thead { display: table-header-group; }   /* header row repeats on every PDF page */
+tr { break-inside: avoid; page-break-inside: avoid; }
+table.csv { width: 100%; }
+table.csv.dense { font-size: 8pt; } table.csv.dense th, table.csv.dense td { padding: 3px 6px; }
+.csv-meta { color: #59636e; font-size: .85em; margin-bottom: .6em; }
+
+/* GitHub alerts */
+.alert { border-left: .25em solid var(--c, #0969da); padding: .4em 1em; color: inherit; margin-bottom: 1em; }
+.alert-title { margin: 0 0 .3em; font-weight: 600; color: var(--c, #0969da); }
+.alert p:empty { display: none; }
+.alert-note { --c: #0969da; } .alert-tip { --c: #1a7f37; } .alert-important { --c: #8250df; }
+.alert-warning { --c: #9a6700; } .alert-caution { --c: #d1242f; }
+
+/* task lists, footnotes, definition lists, front matter, math, mermaid */
+.task-list-item { list-style: none; } .task-list-item-checkbox { margin: 0 .5em .15em -1.4em; vertical-align: middle; }
+.footnotes { font-size: .9em; color: #59636e; border-top: 1px solid #d1d9e0; margin-top: 2em; }
+.footnote-ref a, a.footnote-backref { text-decoration: none; }
+dt { font-weight: 600; margin-top: .6em; } dd { margin-left: 1.5em; }
+details { border: 1px solid #d1d9e0; border-radius: 6px; padding: .4em .8em; } summary { font-weight: 600; }
+.frontmatter { font-size: 8.5pt; color: #59636e; background: #fbfbfc; border-style: dashed; margin-bottom: 1.4em; }
+.math.block { text-align: center; margin: 1em 0; overflow-x: auto; break-inside: avoid; }
+pre.mermaid { background: none; border: 0; text-align: center; break-inside: avoid; white-space: pre; }
+pre.mermaid svg { max-width: 100%; height: auto; }
+
+/* source-code & notebook pages */
+.file-header { font: 600 9.5pt "Segoe UI", -apple-system, Helvetica, sans-serif; color: #59636e; margin-bottom: 6px; }
+.highlight { background: #f6f8fa; border: 1px solid #d1d9e0; border-radius: 6px; padding: 8px 12px; margin-bottom: 1em; }
+.highlight pre { margin: 0; padding: 0; border: 0; background: none; }
+.linenos { color: #8c959f; user-select: none; display: inline-block; min-width: 2.6em; margin-right: .6em; text-align: right; }
+.nb-cell { margin-bottom: 1em; }
+.nb-in { border-left: 3px solid #0969da; }
+.nb-label { font: 8pt Consolas, Menlo, monospace; color: #0969da; margin: 0 0 2px; }
+.nb-out { border-left: 3px solid #d1d9e0; padding-left: 10px; margin: -.3em 0 1em; }
+.nb-out pre { background: none; border: 0; padding: 2px 0; }
+.nb-err pre { color: #d1242f; }
+.image-page { text-align: center; }
+.image-page img { max-height: 255mm; object-fit: contain; }
+.docx-body table { width: 100%; }

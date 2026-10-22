@@ -1,0 +1,8 @@
+# Runtime libraries - all pure Python (~10 MB). The installer puts them in QuickMorph's own folder.
+# Upper bounds keep a surprise major release from breaking existing installs.
+markdown-it-py>=3.0,<5
+mdit-py-plugins>=0.4,<1
+linkify-it-py>=2.0,<3
+pygments>=2.17,<3
+mammoth>=1.8,<2
+docutils>=0.20,<1

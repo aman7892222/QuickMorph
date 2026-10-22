@@ -1,0 +1,61 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Tests - Microsoft Edge (default engine)
+        run: python -m pytest tests -q
+      - name: Tests - Firefox only (PC without Edge/Chrome)
+        env:
+          QUICKMORPH_ENGINE: firefox
+        run: python -m pytest tests -q
+      - name: Installer round trip (HKCU only, Explorer is never restarted)
+        run: |
+          python install.py
+          python install.py --uninstall
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      # The oldest Python we support is the 3.9 that ships with Apple's command line tools.
+      - name: Set up with the Mac's own /usr/bin/python3
+        run: |
+          /usr/bin/python3 --version
+          /usr/bin/python3 -m venv .venv
+          .venv/bin/python -m pip install -q -r requirements.txt -r requirements-dev.txt
+      - run: brew install pandoc
+      - name: Tests - Google Chrome
+        run: .venv/bin/python -m pytest tests -q
+      - name: Tests - built-in WebKit (Mac without Chrome/Edge)
+        env:
+          QUICKMORPH_ENGINE: webkit
+        run: .venv/bin/python -m pytest tests -q
+      - name: Tests - Firefox only
+        env:
+          QUICKMORPH_ENGINE: firefox
+        run: .venv/bin/python -m pytest tests -q
+      - name: Finder Quick Action end to end
+        run: |
+          /usr/bin/python3 install.py
+          plutil -lint ~/Library/Services/QuickMorph*.workflow/Contents/Info.plist ~/Library/Services/QuickMorph*.workflow/Contents/document.wflow
+          printf '# Hello from CI\n\nQUICK_ACTION_OK\n' > "$RUNNER_TEMP/qa.md"
+          automator -i "$RUNNER_TEMP/qa.md" ~/Library/Services/"QuickMorph - Convert to PDF.workflow"
+          test -s "$RUNNER_TEMP/qa.pdf"
+          /usr/bin/python3 install.py --uninstall

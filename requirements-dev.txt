@@ -1,0 +1,4 @@
+# Only needed to run the test suite (python -m pytest tests -q).
+pytest>=8
+pypdf>=4
+python-docx>=1.1

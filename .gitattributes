@@ -1,0 +1,6 @@
+* text=auto
+*.cmd text eol=crlf
+*.command text eol=lf
+*.sh text eol=lf
+quickmorph/vendor/** -diff linguist-vendored
+*.woff2 binary
