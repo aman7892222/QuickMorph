@@ -1,5 +1,9 @@
 # QuickMorph — right-click any file → PDF
 
+[![tests](https://github.com/aman7892222/QuickMorph/actions/workflows/tests.yml/badge.svg)](https://github.com/aman7892222/QuickMorph/actions/workflows/tests.yml)
+![Windows | macOS](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 **View as PDF** or **Convert to PDF** straight from the right-click menu in Windows Explorer and the macOS Finder.
 Markdown (with math and diagrams), notebooks, Word files, CSV, code, logs, images and 80+ other formats become a clean,
 paginated PDF in about a second.
