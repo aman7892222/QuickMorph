@@ -61,10 +61,32 @@ git clone https://github.com/aman7892222/QuickMorph.git
 1. Download this repository and unzip it.
 2. Double-click **`Install.cmd`**. No admin rights needed — it only touches your own user account.
 3. Right-click any file → **View as PDF** or **Convert to PDF**.
-   On Windows 11 they are under **Show more options** (or **Shift + right-click**).
-   Prefer them directly in the menu? Run `Install.cmd --classic-menu`; it takes effect after you sign out and back in.
+   On Windows 11 they are under **Show more options** (or **Shift + right-click**) — see below to move them up.
 
 > QuickMorph never restarts Explorer — your desktop and taskbar are left alone.
+
+#### Windows 11: directly in the right-click menu
+
+Windows 11's own menu only lists *packaged* apps, so plain menu entries always land under **Show more options**.
+QuickMorph can register itself as two tiny app packages instead, built on your PC by the installer:
+
+1. Turn on **Developer Mode** once: *Settings → System → Advanced → Developer Mode* (older builds:
+   *System → For developers*). This needs an administrator. Windows requires it for any app package that isn't
+   signed by a publisher; it allows installing unsigned apps on this PC, so only turn it on if you are fine with that.
+2. Run `Install.cmd` again.
+3. On builds with the customizable menu, switch both entries on under
+   *Settings → Personalization → Context menu → App extensions*.
+4. You can turn Developer Mode off again: Windows only checks it while the installer registers the packages,
+   and the entries keep working afterwards (also after a restart). Turn it back on before you re-run the installer.
+
+Without Developer Mode the installer simply keeps the classic entries. `Install.cmd --no-win11-menu` forces that.
+
+What it costs: Windows asks each entry for its name whenever you right-click a file, so a small helper per entry
+(about 10 MB of RAM each) starts on the first right-click and stays for five minutes to keep the following menus
+instant; then it exits. The classic entries need no helper at all.
+
+The older `Install.cmd --classic-menu` trick (always show the full classic menu) still exists, but Windows 11
+preview builds from late 2026 ignore it.
 
 ### macOS
 
@@ -123,7 +145,8 @@ Set one on Windows with `setx QUICKMORPH_PAPER Letter`, on macOS with `launchctl
 ## Uninstall
 
 Double-click **`Uninstall.cmd`** (Windows) or run `python3 install.py --uninstall` (macOS/Linux).
-It removes the menu entries and QuickMorph's own folder. A Windows 11 classic-menu setting is only removed if
+It removes the menu entries (and the two Windows 11 menu packages) and QuickMorph's own folder. Developer Mode is
+left as you set it. A Windows 11 classic-menu setting is only removed if
 QuickMorph turned it on — if you set it yourself, it stays exactly as it was.
 
 ---
