@@ -206,3 +206,17 @@ def test_installer_never_restarts_explorer_or_finder():
     for bad in ("taskkill", "explorer.exe", "killall", "stop-process"):
         assert bad not in src, bad
     assert "shchangenotify" in src and "pbs" in src
+
+
+def test_win11_menu_sources_agree():
+    """install.py, the manifest template and the C# helper must name the same COM classes and placeholders."""
+    import re
+    inst = (ROOT / "install.py").read_text(encoding="utf-8")
+    cs = (ROOT / "winmenu" / "QuickMorphMenu.cs").read_text(encoding="utf-8")
+    manifest = (ROOT / "winmenu" / "AppxManifest.xml").read_text(encoding="utf-8")
+    class_ids = re.findall(r'Guid\("([0-9A-F-]{36})"\), ClassInterface', cs)
+    assert len(class_ids) == 2
+    for clsid in class_ids:
+        assert clsid in inst, clsid
+    for placeholder in set(re.findall(r"\{([A-Z]+)\}", manifest)):
+        assert f'"{placeholder}"' in inst, placeholder

@@ -11,7 +11,8 @@ What it does:
   1. copies the app into your user folder (Windows: %LOCALAPPDATA%\\QuickMorph,
      macOS: ~/Library/Application Support/QuickMorph, Linux: ~/.local/share/quickmorph)
   2. pip-installs a few pure-Python libraries into ...\\app\\libs (isolated: never touches your global Python)
-  3. Windows: registers two verbs under HKCU\\Software\\Classes\\*\\shell
+  3. Windows: registers two verbs under HKCU\\Software\\Classes\\*\\shell - or, on Windows 11 with Developer
+              Mode on, two tiny app packages so the entries sit directly in the Windows 11 menu (see winmenu/)
      macOS:   adds two Finder Quick Actions to ~/Library/Services (right-click > Quick Actions)
      Linux:   nothing to register - use the `quickmorph` command (see README)
   4. converts a tiny test file to prove everything works
@@ -52,6 +53,23 @@ VERB_KEYS = {"view": "QuickMorph.View", "save": "QuickMorph.Save"}
 SHCNE_ASSOCCHANGED, SHCNF_IDLIST = 0x08000000, 0
 CLASSIC_MENU_NOTE = ('Note: the Windows 11 classic-menu change takes effect after you sign out and back in '
                      '(QuickMorph never restarts Explorer for you).')
+
+# --------------------------------------------------------------------------- Windows 11 menu packages
+# Windows 11's own right-click menu only lists *packaged* apps, so each entry gets a tiny package (see winmenu/).
+MENU_SRC = HERE / "winmenu"
+MENU_DIR = APP_DIR / "menu"
+MENU_VERSION = "1.0.0.0"
+MENU_PACKAGES = {  # action: (package identity, verb id, COM class id - must match winmenu/QuickMorphMenu.cs)
+    "view": ("QuickMorph.ViewAsPdf", "QuickMorphView", "A10E8A86-B250-4050-8D12-295FA3DD7532"),
+    "save": ("QuickMorph.ConvertToPdf", "QuickMorphSave", "FBE6F860-8DB7-433F-BC65-3C682A26C1EC"),
+}
+MENU_LOGOS = {"StoreLogo.png": 50, "Square44x44Logo.png": 44, "Square150x150Logo.png": 150}
+MENU_QUIT_EVENT = r"Local\QuickMorph.MenuHelper.Quit"  # must match winmenu/QuickMorphMenu.cs
+ERROR_NEEDS_DEVELOPER_MODE = "0x80073CFF"
+DEVELOPER_MODE_NOTE = ("Windows 11: to show both entries directly in the right-click menu, turn on Developer Mode once\n"
+                       "   (Settings > System > Advanced > Developer Mode; on older builds System > For developers)\n"
+                       "   and run the installer again. Windows needs it to accept an app package that is not\n"
+                       "   signed by a publisher - QuickMorph builds its own on your PC.")
 
 # --------------------------------------------------------------------------- macOS Quick Actions
 SERVICES = Path.home() / "Library" / "Services"
@@ -249,6 +267,158 @@ def win_refresh_shell() -> None:
     ctypes.windll.shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None)
 
 
+# --------------------------------------------------------------------------- Windows 11 menu packages
+def win11() -> bool:
+    return WINDOWS and sys.getwindowsversion().build >= 22000
+
+
+def _powershell(script: str) -> subprocess.CompletedProcess:
+    """Windows PowerShell 5.1 by full path: it ships with Windows and has the Appx cmdlets built in."""
+    exe = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    return subprocess.run([str(exe), "-NoProfile", "-NonInteractive", "-Command",
+                           "$ProgressPreference = 'SilentlyContinue'; $ErrorActionPreference = 'Stop'; " + script],
+                          capture_output=True, text=True, timeout=300, creationflags=0x08000000)  # no console window
+
+
+def _ps_quote(text: object) -> str:
+    return "'" + str(text).replace("'", "''") + "'"
+
+
+def _csc() -> Path | None:
+    """The C# compiler that is part of Windows itself (.NET Framework 4.x)."""
+    root = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Microsoft.NET"
+    for arch in ("Framework64", "Framework"):
+        cand = root / arch / "v4.0.30319" / "csc.exe"
+        if cand.is_file():
+            return cand
+    return None
+
+
+def _logo_png(size: int) -> bytes:
+    """QuickMorph's logo - a white page on a red tile - drawn here so the repository ships no binary files."""
+    import struct
+    import zlib
+    red, white, clear = b"\xd9\x30\x25\xff", b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"
+    r = size * 0.18                                    # corner radius of the tile
+    left, right, top, bottom = size * 0.27, size * 0.73, size * 0.17, size * 0.83
+    fold = size * 0.17                                 # the page's folded top-right corner
+    rows = bytearray()
+    for y in range(size):
+        rows.append(0)                                 # PNG filter type: none
+        for x in range(size):
+            cx, cy = x + 0.5, y + 0.5
+            dx, dy = max(r - cx, cx - (size - r), 0), max(r - cy, cy - (size - r), 0)
+            if dx * dx + dy * dy > r * r:
+                rows += clear
+                continue
+            on_page = left <= cx < right and top <= cy < bottom and (cx - (right - fold)) < (cy - top)
+            if on_page:
+                fy = (cy - top) / (bottom - top)       # three red "text lines" on the page
+                on_line = left + size * 0.08 <= cx < right - size * 0.08 and any(abs(fy - c) < 0.04 for c in (0.45, 0.62, 0.79))
+                rows += red if on_line else white
+            else:
+                rows += red
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b""))
+
+
+def _menu_helpers_quit() -> None:
+    """Ask a still-warm menu helper to exit (it waits on this event), so its file can be replaced. No process
+    is ever killed: without the signal the helper simply leaves by itself a few minutes after the last right-click."""
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    k32.OpenEventW.restype = ctypes.c_void_p
+    handle = k32.OpenEventW(0x0002, False, MENU_QUIT_EVENT)  # EVENT_MODIFY_STATE; None when no helper is running
+    if handle:
+        k32.SetEvent(ctypes.c_void_p(handle))
+        time.sleep(1.0)
+        k32.CloseHandle(ctypes.c_void_p(handle))
+
+
+def _replace_file(src: Path, dst: Path) -> None:
+    for attempt in range(20):  # a helper that was just told to quit may need a moment to let go of its file
+        try:
+            shutil.copy2(src, dst)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.25)
+
+
+def win11_menu_unregister() -> None:
+    """Remove the menu packages (Windows closes a still-running menu helper first) and their folder."""
+    if not win11():
+        return
+    names = ", ".join(_ps_quote(identity) for identity, _, _ in MENU_PACKAGES.values())
+    try:
+        _powershell(f"foreach ($n in {names}) {{ Get-AppxPackage -Name $n | Remove-AppxPackage }}")
+    except (OSError, subprocess.SubprocessError):
+        pass
+    shutil.rmtree(MENU_DIR, ignore_errors=True)
+
+
+def win11_menu_register() -> bool:
+    """Build and register one package per menu entry; False (with a note) if Windows refuses.
+
+    An existing registration is refreshed in place rather than removed first, so the choices you made under
+    Settings > Personalization > Context menu survive an update."""
+    csc = _csc()
+    if csc is None or not (MENU_SRC / "QuickMorphMenu.cs").is_file():
+        print("   ! Windows 11 menu: the built-in C# compiler or winmenu/ is missing - using the classic menu entries")
+        return False
+    print("-> adding QuickMorph to the Windows 11 right-click menu")
+    build = MENU_DIR / "build"
+    build.mkdir(parents=True, exist_ok=True)
+    exe = build / "QuickMorphMenu.exe"
+    r = subprocess.run([str(csc), "/nologo", "/target:winexe", "/optimize+", "/platform:anycpu", f"/out:{exe}",
+                        str(MENU_SRC / "QuickMorphMenu.cs")], capture_output=True, text=True, creationflags=0x08000000)
+    if r.returncode != 0 or not exe.is_file():
+        print("   ! could not compile the menu helper - using the classic menu entries:\n   "
+              + (r.stdout or r.stderr).strip().replace("\n", "\n   "))
+        return False
+
+    template = (MENU_SRC / "AppxManifest.xml").read_text(encoding="utf-8")
+    icon = os.path.expandvars(r"%SystemRoot%\System32\imageres.dll") + ",-68"  # same stock icon as the classic entries
+    python, script = launch_command("view")[:2]
+    manifests = []
+    try:
+        _menu_helpers_quit()
+        for action, (identity, verb, clsid) in MENU_PACKAGES.items():
+            pkg = MENU_DIR / action
+            (pkg / "Assets").mkdir(parents=True, exist_ok=True)
+            _replace_file(exe, pkg / exe.name)
+            (pkg / "QuickMorphMenu.cfg").write_text(
+                f"action={action}\nview={ACTIONS['view']}\nsave={ACTIONS['save']}\n"
+                f"python={python}\nscript={script}\nicon={icon}\n", encoding="utf-8")
+            for name, size in MENU_LOGOS.items():
+                (pkg / "Assets" / name).write_bytes(_logo_png(size))
+            manifest = template
+            for key, value in {"IDENTITY": identity, "VERSION": MENU_VERSION, "TITLE": ACTIONS[action],
+                               "VERB": verb, "CLSID": clsid}.items():
+                manifest = manifest.replace("{" + key + "}", value)
+            (pkg / "AppxManifest.xml").write_text(manifest, encoding="utf-8")
+            manifests.append(pkg / "AppxManifest.xml")
+        shutil.rmtree(build, ignore_errors=True)
+        r = _powershell("; ".join(f"Add-AppxPackage -Register {_ps_quote(m)}" for m in manifests))
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"   ! could not set up the menu packages ({e}) - using the classic menu entries")
+        return False
+    if r.returncode != 0:
+        if ERROR_NEEDS_DEVELOPER_MODE.lower() in (r.stderr or "").lower():
+            print("   Windows did not accept the menu packages because Developer Mode is off.")
+            print("   " + DEVELOPER_MODE_NOTE)
+        else:
+            print("   ! Windows did not accept the menu packages - using the classic menu entries:\n   "
+                  + (r.stderr or r.stdout).strip().replace("\n", "\n   ")[:1500])
+        return False
+    return True
+
+
 # --------------------------------------------------------------------------- macOS
 def _mac_plists(action: str) -> tuple[dict, dict]:
     import uuid
@@ -340,12 +510,15 @@ def main() -> None:
     ap.add_argument("--with-pandoc", action="store_true", help="also download Pandoc for .odt/.rtf/.epub/.org/.tex")
     ap.add_argument("--classic-menu", action="store_true", help="Windows 11: show the full classic right-click menu")
     ap.add_argument("--no-classic-menu", action="store_true", help="Windows 11: undo --classic-menu")
+    ap.add_argument("--no-win11-menu", action="store_true",
+                    help="Windows 11: only add the classic entries (under 'Show more options')")
     ap.add_argument("--skip-self-test", action="store_true", help=argparse.SUPPRESS)
     a = ap.parse_args()
 
     if a.uninstall:
         if WINDOWS:
             win_unregister()
+            win11_menu_unregister()
             set_classic_menu(False)
             win_refresh_shell()
         elif MACOS:
@@ -354,6 +527,7 @@ def main() -> None:
         print("QuickMorph removed.")
         return
 
+    in_win11_menu = False
     if WINDOWS:
         win_unregister()  # clean slate: also removes keys from older versions
     copy_app()
@@ -361,7 +535,10 @@ def main() -> None:
     if a.with_pandoc:
         fetch_pandoc()
     if WINDOWS:
-        win_register()
+        in_win11_menu = win11() and not a.no_win11_menu and win11_menu_register()
+        if not in_win11_menu:
+            win11_menu_unregister()  # never leave one entry packaged and the other classic
+            win_register()  # Windows 10, or Windows 11 would not take the packages
         if a.classic_menu or a.no_classic_menu:
             set_classic_menu(a.classic_menu)
         win_refresh_shell()
@@ -373,9 +550,11 @@ def main() -> None:
     print()
     if WINDOWS:
         print("Done! Right-click any file -> 'View as PDF' or 'Convert to PDF'.")
-        if not classic_menu_state()[0]:
-            print("Windows 11: they are under 'Show more options' (or Shift+Right-click). "
-                  "Run with --classic-menu to show them directly.")
+        if in_win11_menu:
+            print("Windows 11: if they sit in a sub-menu, switch both on under Settings > Personalization > "
+                  "Context menu > App extensions.")
+        elif win11():
+            print("Windows 11: they are under 'Show more options' (or Shift+Right-click).")
     elif MACOS:
         print("Done! In Finder, right-click any file -> Quick Actions -> 'View as PDF' or 'Convert to PDF'.")
         print("(Not listed? System Settings > Privacy & Security > Extensions > Finder - tick both.)")
