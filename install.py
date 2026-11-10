@@ -69,7 +69,8 @@ ERROR_NEEDS_DEVELOPER_MODE = "0x80073CFF"
 DEVELOPER_MODE_NOTE = ("Windows 11: to show both entries directly in the right-click menu, turn on Developer Mode once\n"
                        "   (Settings > System > Advanced > Developer Mode; on older builds System > For developers)\n"
                        "   and run the installer again. Windows needs it to accept an app package that is not\n"
-                       "   signed by a publisher - QuickMorph builds its own on your PC.")
+                       "   signed by a publisher - QuickMorph builds its own on your PC. You can turn it off again\n"
+                       "   once the installer has finished.")
 
 # --------------------------------------------------------------------------- macOS Quick Actions
 SERVICES = Path.home() / "Library" / "Services"
@@ -551,6 +552,7 @@ def main() -> None:
     if WINDOWS:
         print("Done! Right-click any file -> 'View as PDF' or 'Convert to PDF'.")
         if in_win11_menu:
+            print("Windows 11: Developer Mode was only needed for this step - you can turn it off again.")
             print("Windows 11: if they sit in a sub-menu, switch both on under Settings > Personalization > "
                   "Context menu > App extensions.")
         elif win11():

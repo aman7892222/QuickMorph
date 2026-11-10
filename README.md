@@ -76,6 +76,8 @@ QuickMorph can register itself as two tiny app packages instead, built on your P
 2. Run `Install.cmd` again.
 3. On builds with the customizable menu, switch both entries on under
    *Settings → Personalization → Context menu → App extensions*.
+4. You can turn Developer Mode off again: Windows only checks it while the installer registers the packages,
+   and the entries keep working afterwards (also after a restart). Turn it back on before you re-run the installer.
 
 Without Developer Mode the installer simply keeps the classic entries. `Install.cmd --no-win11-menu` forces that.
 
